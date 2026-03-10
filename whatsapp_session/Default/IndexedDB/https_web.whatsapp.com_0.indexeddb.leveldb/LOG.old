@@ -1,0 +1,54 @@
+2026/03/10-22:32:09.148 b9dc Reusing MANIFEST /home/nytheris/Desktop/Projects/whatsapp-auto/whatsapp_session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/03/10-22:32:09.149 b9dc Recovering log #574
+2026/03/10-22:32:09.219 b9dc Reusing old log /home/nytheris/Desktop/Projects/whatsapp-auto/whatsapp_session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000574.log 
+2026/03/10-22:32:19.422 b9dd Level-0 table #588: started
+2026/03/10-22:32:19.467 b9dd Level-0 table #588: 1226390 bytes OK
+2026/03/10-22:32:19.472 b9dd Delete type=0 #574
+2026/03/10-22:32:21.569 b9dd Compacting 1@0 + 0@1 files
+2026/03/10-22:32:21.609 b9dd Generated table #589@0: 28069 keys, 529046 bytes
+2026/03/10-22:32:21.617 b9dd Generated table #590@0: 962 keys, 71087 bytes
+2026/03/10-22:32:21.618 b9dd Compacted 1@0 + 0@1 files => 600133 bytes
+2026/03/10-22:32:21.619 b9dd compacted to: files[ 0 2 20 0 0 0 0 ]
+2026/03/10-22:32:21.621 b9dd Delete type=2 #588
+2026/03/10-22:32:24.964 b9dd Compacting 1@1 + 11@2 files
+2026/03/10-22:32:25.043 b9dd Generated table #591@1: 56910 keys, 2234508 bytes
+2026/03/10-22:32:25.073 b9dd Generated table #592@1: 16478 keys, 2174074 bytes
+2026/03/10-22:32:25.091 b9dd Generated table #593@1: 2077 keys, 2160735 bytes
+2026/03/10-22:32:25.107 b9dd Generated table #594@1: 1988 keys, 2154597 bytes
+2026/03/10-22:32:25.124 b9dd Generated table #595@1: 2667 keys, 2151393 bytes
+2026/03/10-22:32:25.142 b9dd Generated table #596@1: 3212 keys, 2153609 bytes
+2026/03/10-22:32:25.158 b9dd Generated table #597@1: 3160 keys, 2152437 bytes
+2026/03/10-22:32:25.175 b9dd Generated table #598@1: 5170 keys, 2159161 bytes
+2026/03/10-22:32:25.250 b9dd Generated table #599@1: 32244 keys, 2251103 bytes
+2026/03/10-22:32:25.302 b9dd Generated table #600@1: 26569 keys, 2265944 bytes
+2026/03/10-22:32:25.305 b9dd Generated table #601@1: 901 keys, 68733 bytes
+2026/03/10-22:32:25.306 b9dd Compacted 1@1 + 11@2 files => 21926294 bytes
+2026/03/10-22:32:25.309 b9dd compacted to: files[ 0 1 20 0 0 0 0 ]
+2026/03/10-22:32:25.310 b9dd Delete type=2 #579
+2026/03/10-22:32:25.310 b9dd Delete type=2 #568
+2026/03/10-22:32:25.310 b9dd Delete type=2 #571
+2026/03/10-22:32:25.310 b9dd Delete type=2 #566
+2026/03/10-22:32:25.310 b9dd Delete type=2 #567
+2026/03/10-22:32:25.310 b9dd Delete type=2 #578
+2026/03/10-22:32:25.311 b9dd Delete type=2 #564
+2026/03/10-22:32:25.311 b9dd Delete type=2 #569
+2026/03/10-22:32:25.311 b9dd Delete type=2 #572
+2026/03/10-22:32:25.311 b9dd Delete type=2 #589
+2026/03/10-22:32:25.311 b9dd Delete type=2 #565
+2026/03/10-22:32:25.311 b9dd Delete type=2 #570
+2026/03/10-22:32:39.317 b9dd Compacting 1@1 + 6@2 files
+2026/03/10-22:32:39.424 b9dd Generated table #602@1: 28608 keys, 2244000 bytes
+2026/03/10-22:32:39.463 b9dd Generated table #603@1: 11681 keys, 2140627 bytes
+2026/03/10-22:32:39.581 b9dd Generated table #604@1: 97405 keys, 2246143 bytes
+2026/03/10-22:32:39.709 b9dd Generated table #605@1: 100976 keys, 2251675 bytes
+2026/03/10-22:32:39.822 b9dd Generated table #606@1: 94017 keys, 2244366 bytes
+2026/03/10-22:32:39.829 b9dd Generated table #607@1: 3325 keys, 141217 bytes
+2026/03/10-22:32:39.829 b9dd Compacted 1@1 + 6@2 files => 11268028 bytes
+2026/03/10-22:32:39.831 b9dd compacted to: files[ 0 0 20 0 0 0 0 ]
+2026/03/10-22:32:39.832 b9dd Delete type=2 #582
+2026/03/10-22:32:39.832 b9dd Delete type=2 #590
+2026/03/10-22:32:39.832 b9dd Delete type=2 #562
+2026/03/10-22:32:39.832 b9dd Delete type=2 #584
+2026/03/10-22:32:39.832 b9dd Delete type=2 #585
+2026/03/10-22:32:39.832 b9dd Delete type=2 #583
+2026/03/10-22:32:39.832 b9dd Delete type=2 #581
