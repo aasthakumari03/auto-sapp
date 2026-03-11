@@ -25,7 +25,31 @@ const RESPONSE_MESSAGE = 'Vibing on my own baby';
 
     // Wait for the app to load
     console.log('🔍 Waiting for chat list...');
-    await page.waitForSelector('[data-testid="chat-list"]', { timeout: 60000 });
+    try {
+        await Promise.race([
+            page.waitForSelector('[data-testid="chat-list"]', { timeout: 60000 }),
+            page.waitForSelector('canvas[aria-label="Scan me!"]', { timeout: 60000 })
+        ]);
+
+        if (await page.isVisible('canvas[aria-label="Scan me!"]')) {
+            console.error('--------------------------------------------------');
+            console.error('⚠️ SESSION EXPIRED: Please run "node auth.js" first.');
+            console.error('--------------------------------------------------');
+            await browser.close();
+            process.exit(1);
+        }
+    } catch (e) {
+        if (page.url().includes('post_logout=1')) {
+            console.error('--------------------------------------------------');
+            console.error('⚠️ LOGGED OUT: Your session has expired.');
+            console.error('👉 ACTION REQUIRED: Run "node auth.js" to re-authenticate.');
+            console.error('--------------------------------------------------');
+        } else {
+            console.error('❌ Timeout or unexpected page state:', e.message);
+        }
+        await browser.close();
+        process.exit(1);
+    }
 
     // Search for the contact
     console.log(`🔎 Searching for contact: ${CONTACT_NAME}`);
