@@ -4,9 +4,9 @@ const path = require('path');
 /**
  * CONFIGURATION
  */
-const CONTACT_NAME = 'Jais';
-const MESSAGE_TEXT = 'I love you Shona Pari';
-const MESSAGE_COUNT = 50;
+const CONTACT_NAME = 'Bidita lpu';
+const MESSAGE_TEXT = 'bandar';
+const MESSAGE_COUNT = 10;
 const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
 
 (async () => {
