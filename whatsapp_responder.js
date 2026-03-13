@@ -6,8 +6,8 @@ const fs = require('fs');
  * CONFIGURATION
  */
 const CONTACT_NAME = 'Jais';
-const BURST_MESSAGE = 'I Love you Bubbuu';
-const BURST_COUNT = 10;
+const BURST_MESSAGE = 'I Love you Bubuu'; // Revised spelling per user
+const BURST_COUNT = 5; // Revised count per user
 const TRIGGER_MESSAGE = 'Kkrh';
 const RESPONSE_MESSAGE = 'Vibing on my own baby';
 const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
@@ -17,10 +17,8 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     console.log('🚀 WhatsApp Bot starting...');
     console.log(`📡 Targeting: "${CONTACT_NAME}"`);
     console.log(`💖 Initial Burst: "${BURST_MESSAGE}" (${BURST_COUNT} times)`);
-    console.log(`📡 Monitoring for: "${TRIGGER_MESSAGE}"`);
     console.log('--------------------------------------------------');
 
-    // Ensure session directory exists
     if (!fs.existsSync(SESSION_PATH)) {
         fs.mkdirSync(SESSION_PATH, { recursive: true });
     }
@@ -37,108 +35,110 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     });
 
     const page = await context.newPage();
-    page.setDefaultTimeout(120000); // 2 minutes
+    page.setDefaultTimeout(120000); 
 
     console.log('🌐 Opening WhatsApp Web...');
     await page.goto('https://web.whatsapp.com');
 
-    // 1. WAIT FOR LOGIN
+    // 1. WAIT FOR LOAD/LOGIN
     console.log('🔍 Waiting for WhatsApp to load...');
     try {
-        await page.waitForSelector('#pane-side, [data-testid="search"], [aria-label="Search"]', { timeout: 45000 });
+        await page.waitForSelector('#pane-side, [data-testid="chat-list"]', { timeout: 60000 });
         console.log('✅ WhatsApp Loaded!');
     } catch (e) {
-        console.log('👉 ACTION REQUIRED: Please scan the QR code if visible.');
-        try {
-            await page.waitForSelector('#pane-side, [data-testid="search"], [aria-label="Search"]', { timeout: 0 });
-            console.log('✅ Login confirmed!');
-        } catch (err) {
-            console.error('❌ Login failed.');
-            await context.close();
-            process.exit(1);
-        }
+        console.log('👉 ACTION REQUIRED: Please log in / scan QR code.');
+        await page.waitForSelector('#pane-side, [data-testid="chat-list"]', { timeout: 0 });
+        console.log('✅ Login confirmed!');
     }
 
-    // 2. OPEN CHAT
+    // Small delay to ensure side pane UI is fully interactive
+    await page.waitForTimeout(5000);
+
+    // 2. SEARCH AND OPEN CHAT
     console.log(`🔎 Searching for "${CONTACT_NAME}"...`);
     let chatOpened = false;
     let retries = 5;
     
     while (retries > 0 && !chatOpened) {
         try {
-            // Wait for search box using multiple common selectors
-            const searchBoxSelector = 'div[contenteditable="true"][data-tab="3"], [data-testid="search-input-element-role"], [aria-label="Search text input field"]';
+            // Very broad search box selectors
+            const searchBoxSelector = [
+                'div[contenteditable="true"][data-tab="3"]',
+                '[data-testid="search-input-element-role"]',
+                '[aria-label="Search text input field"]',
+                'div[title="Search input textbox"]',
+                'div.selectable-text[contenteditable="true"]'
+            ].join(', ');
+
             await page.waitForSelector(searchBoxSelector, { timeout: 20000 });
-            const searchBox = page.locator(searchBoxSelector).first();
+            const searchBoxes = page.locator(searchBoxSelector);
+            const searchBox = searchBoxes.first();
             
             await searchBox.click();
+            await page.waitForTimeout(1000);
+            
+            // Explicitly clear
             await page.keyboard.down('Control');
             await page.keyboard.press('A');
             await page.keyboard.up('Control');
             await page.keyboard.press('Backspace');
             
             await page.keyboard.type(CONTACT_NAME, { delay: 100 });
-            await page.waitForTimeout(3000); // Wait for results
+            console.log(`   Typed "${CONTACT_NAME}", waiting for results...`);
+            await page.waitForTimeout(4000); 
             
-            // Look for the contact in the side pane results
-            // We use a broader approach: look for the title in the chat list area
-            const contactSelector = `span[title="${CONTACT_NAME}"], [data-testid="cell-frame-container"] span[title="${CONTACT_NAME}"]`;
-            await page.waitForSelector(contactSelector, { timeout: 10000 });
+            // Find the contact in results
+            const contactSelector = `span[title="${CONTACT_NAME}"]`;
+            const contactLocator = page.locator(`[data-testid="chat-list"] ${contactSelector}, #pane-side ${contactSelector}`).first();
             
-            // Click the one specifically in the side pane / search results
-            const results = page.locator(contactSelector);
-            const count = await results.count();
+            await contactLocator.waitFor({ state: 'visible', timeout: 10000 });
+            await contactLocator.click();
             
-            let clicked = false;
-            for (let i = 0; i < count; i++) {
-                const res = results.nth(i);
-                if (await res.isVisible()) {
-                    await res.click();
-                    clicked = true;
-                    break;
-                }
-            }
-            
-            if (!clicked) throw new Error('Result found but not clickable');
-
-            // Confirm it's open by checking the header
-            await page.waitForSelector(`header span[title="${CONTACT_NAME}"]`, { timeout: 10000 });
+            // Confirm with header
+            await page.waitForSelector(`header span[title="${CONTACT_NAME}"]`, { timeout: 15000 });
             console.log(`✅ Success: Chat with "${CONTACT_NAME}" is open.`);
             chatOpened = true;
         } catch (e) {
-            console.log(`⚠️ Search/Open failed: ${e.message.split('\n')[0]}. Retrying...`);
+            console.log(`⚠️ Attempt failed: ${e.message.split('\n')[0]}. Retrying...`);
             retries--;
             await page.waitForTimeout(3000);
+            // If it keeps failing, try to refresh or click search button if exists
+            if (retries === 2) {
+                console.log('🔄 Refreshing page to reset state...');
+                await page.reload();
+                await page.waitForSelector('#pane-side', { timeout: 60000 });
+            }
         }
     }
 
     if (!chatOpened) {
-        console.log('❌ Auto-search failed multiple times. Please click the chat manually.');
-        await page.waitForSelector('footer [contenteditable="true"]', { timeout: 0 });
+        console.log('❌ Auto-search failed. Please click "Jais" manually.');
+        await page.waitForSelector('header span[title="Jais"]', { timeout: 0 });
+        console.log('✅ Manual click detected!');
     }
 
-    // 3. INITIAL BURST
-    console.log(`🚀 Sending initial burst: "${BURST_MESSAGE}" x ${BURST_COUNT}...`);
+    // 3. SEND MESSAGE BURST (5 TIMES)
+    console.log(`🚀 Sending BURST: "${BURST_MESSAGE}" x ${BURST_COUNT}...`);
     const messageBoxSelector = 'footer [contenteditable="true"], [data-testid="conversation-text-input"]';
     
     for (let i = 1; i <= BURST_COUNT; i++) {
         try {
-            await page.waitForSelector(messageBoxSelector);
+            await page.waitForSelector(messageBoxSelector, { timeout: 10000 });
             const messageBox = page.locator(messageBoxSelector).first();
             await messageBox.click();
-            await page.fill(messageBoxSelector, BURST_MESSAGE);
+            await page.keyboard.type(BURST_MESSAGE);
             await page.keyboard.press('Enter');
-            console.log(`📈 Burst Progress: ${i}/${BURST_COUNT}`);
-            await page.waitForTimeout(500 + Math.random() * 500);
+            console.log(`   [Burst] ${i}/${BURST_COUNT} sent.`);
+            await page.waitForTimeout(1000 + Math.random() * 500);
         } catch (e) {
-            console.log(`⚠️ Burst retry ${i}...`);
+            console.log(`   [Burst] Message ${i} failed, retrying...`);
             i--;
         }
     }
     console.log('✅ Burst complete.');
 
-    // 4. MONITORING LOOP
-    console.log(`📡 Now monitoring for "${TRIGGER_MESSAGE}"...`);
+    // 4. ENTER RESPONDER MODE
+    console.log(`📡 Entering Responder Mode. Monitoring for "${TRIGGER_MESSAGE}"...`);
     let lastRepliedMessageId = null;
 
     while (true) {
@@ -147,10 +147,9 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
             
             if (messages.length > 0) {
                 const latestMessage = messages[messages.length - 1];
-                const messageTextContent = await latestMessage.innerText();
+                const messageTextContent = (await latestMessage.innerText()).trim();
                 const messageId = await latestMessage.getAttribute('data-id');
 
-                // Check if it's an incoming message
                 const isOutgoing = await latestMessage.evaluate(node => {
                     return node.closest('.message-out') !== null || 
                            node.innerHTML.includes('data-testid="msg-check"') ||
@@ -162,9 +161,8 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
                         console.log(`🔔 Trigger detected: "${messageTextContent}"`);
                         
                         await page.waitForSelector(messageBoxSelector);
-                        const messageBox = page.locator(messageBoxSelector).first();
-                        await messageBox.click();
-                        await page.fill(messageBoxSelector, RESPONSE_MESSAGE);
+                        await page.locator(messageBoxSelector).first().click();
+                        await page.keyboard.type(RESPONSE_MESSAGE);
                         await page.keyboard.press('Enter');
                         
                         console.log(`📤 Replied: "${RESPONSE_MESSAGE}"`);
@@ -173,7 +171,7 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
                 }
             }
         } catch (error) {
-            // Temporary error handling for DOM changes
+            // Quietly handle dom detach
         }
         await page.waitForTimeout(2000);
     }
