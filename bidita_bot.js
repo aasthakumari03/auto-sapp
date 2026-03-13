@@ -6,13 +6,13 @@ const fs = require('fs');
  * CONFIGURATION
  */
 const CONTACT_NAME = 'Bidita lpu';
-const MESSAGE_TEXT = 'Tum sundar ho';
-const MESSAGE_COUNT = 10;
+const MESSAGE_TEXT = 'Tum sundari ho';
+const MESSAGE_COUNT = 5;
 const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
 
 (async () => {
     console.log('--------------------------------------------------');
-    console.log('🚀 Bidita Bot starting (v2 Robust Search)...');
+    console.log('🚀 Bidita Bot starting (v3 Ultra Reliable)...');
     console.log(`📡 Targeting: "${CONTACT_NAME}"`);
     console.log(`💬 Message: "${MESSAGE_TEXT}" (${MESSAGE_COUNT} times)`);
     console.log('--------------------------------------------------');
@@ -38,7 +38,7 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     console.log('🌐 Opening WhatsApp Web...');
     await page.goto('https://web.whatsapp.com');
 
-    // 1. WAIT FOR LOAD & STABILITY
+    // 1. WAIT FOR LOAD
     console.log('🔍 Waiting for WhatsApp to load...');
     try {
         await page.waitForSelector('#pane-side, [data-testid="chat-list"]', { timeout: 60000 });
@@ -48,11 +48,11 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
         await page.waitForSelector('#pane-side, [data-testid="chat-list"]', { timeout: 0 });
     }
 
-    console.log('⏳ Waiting 10 seconds for UI stability...');
-    await page.waitForTimeout(10000);
+    // Delay to let UI settle
+    await page.waitForTimeout(5000);
 
     // 2. OPEN CHAT
-    const clickContact = async (locator) => {
+    const clickAggressive = async (locator) => {
         await locator.dispatchEvent('mousedown');
         await locator.click();
     };
@@ -64,38 +64,74 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     let chatOpened = false;
     if (await visibleContact.isVisible()) {
         console.log('   Contact visible! Clicking...');
-        await clickContact(visibleContact);
+        await clickAggressive(visibleContact);
         chatOpened = true;
-    } else {
-        console.log('   Searching...');
-        // Proven selector from index.js
-        const searchBoxSelector = 'div[contenteditable="true"][data-tab="3"]';
-        
-        let searchBox = page.locator(searchBoxSelector).first();
-        if (!(await searchBox.isVisible())) {
-            console.log('   Search input not visible, clicking search icon first...');
-            const searchIcon = page.locator('[data-testid="search"], [aria-label="Search"]').first();
-            await searchIcon.click();
-            await page.waitForTimeout(2000);
+    } 
+    
+    // If not opened or click failed, search
+    if (!chatOpened) {
+        console.log('   Starting robust search flow...');
+        const searchBoxSelectors = [
+            'div[contenteditable="true"][data-tab="3"]',
+            '[data-testid="search-input-element-role"]',
+            '[aria-label="Search text input field"]',
+            'div[title="Search input textbox"]'
+        ];
+
+        let searchBoxFound = false;
+        for (const selector of searchBoxSelectors) {
+            const locator = page.locator(selector).first();
+            if (await locator.isVisible()) {
+                await locator.click();
+                searchBoxFound = true;
+                break;
+            }
         }
 
-        await searchBox.waitFor({ state: 'visible', timeout: 15000 });
-        await searchBox.click();
-        await page.fill(searchBoxSelector, CONTACT_NAME);
-        await page.waitForTimeout(3000); // Wait for results
-        
-        const result = page.locator(`[data-testid="chat-list"] ${contactSelector}, #pane-side ${contactSelector}`).first();
-        await result.waitFor({ state: 'visible', timeout: 15000 });
-        await clickContact(result);
-        chatOpened = true;
+        if (!searchBoxFound) {
+            console.log('   Search input not visible. Trying to click search button/icon...');
+            const searchIcon = page.locator('[data-testid="search"], [aria-label="Search"], button:has(span[data-testid="search"])').first();
+            if (await searchIcon.isVisible()) {
+                await searchIcon.click();
+                await page.waitForTimeout(2000);
+            }
+        }
+
+        // Try to find the box after potentially clicking search icon
+        const finalSearchBox = page.locator(searchBoxSelectors.join(', ')).first();
+        try {
+            await finalSearchBox.waitFor({ state: 'visible', timeout: 15000 });
+            await finalSearchBox.click();
+            
+            // Clear and fill
+            await page.keyboard.down('Control');
+            await page.keyboard.press('A');
+            await page.keyboard.up('Control');
+            await page.keyboard.press('Backspace');
+            await page.keyboard.type(CONTACT_NAME, { delay: 100 });
+            
+            console.log(`   Typed name, waiting for results...`);
+            await page.waitForTimeout(5000);
+            
+            const result = page.locator(`[data-testid="chat-list"] ${contactSelector}, #pane-side ${contactSelector}`).first();
+            await result.waitFor({ state: 'visible', timeout: 15000 });
+            await clickAggressive(result);
+            chatOpened = true;
+        } catch (err) {
+            console.log('   Search flow failed. Trying manual enter/click fallback.');
+        }
     }
 
     const messageBoxSelector = 'footer [contenteditable="true"], [data-testid="conversation-text-input"]';
-    console.log('⏳ Waiting for message box...');
-    await page.waitForSelector(messageBoxSelector, { timeout: 20000 });
-    console.log('✅ Ready to send!');
+    if (!chatOpened) {
+        console.log('❌ Auto-open failed. Please click "Bidita lpu" manually.');
+    }
 
-    // 3. BURST
+    // Wait for message box to be visible as the final signal
+    await page.waitForSelector(messageBoxSelector, { timeout: 0 });
+    console.log('✅ Chat is ready!');
+
+    // 3. BURST (5 TIMES)
     console.log(`🚀 Bursting "${MESSAGE_TEXT}" x ${MESSAGE_COUNT}...`);
     for (let i = 1; i <= MESSAGE_COUNT; i++) {
         try {
@@ -104,9 +140,9 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
             await page.keyboard.type(MESSAGE_TEXT);
             await page.keyboard.press('Enter');
             console.log(`   ➜ Sent ${i}/${MESSAGE_COUNT}`);
-            await page.waitForTimeout(300 + Math.random() * 200);
+            await page.waitForTimeout(500 + Math.random() * 500);
         } catch (err) {
-            console.log(`   ⚠️ Retrying message ${i}...`);
+            console.log(`   ⚠️ Message ${i} failed, retrying...`);
             i--;
         }
     }
@@ -117,5 +153,4 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
 
     await page.waitForTimeout(5000);
     await context.close();
-    console.log('👋 Browser closed.');
 })();
