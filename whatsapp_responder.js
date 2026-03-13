@@ -2,15 +2,22 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
+/**
+ * CONFIGURATION
+ */
 const CONTACT_NAME = 'Jais';
+const BURST_MESSAGE = 'I Love you Bubbuu';
+const BURST_COUNT = 10;
 const TRIGGER_MESSAGE = 'Kkrh';
 const RESPONSE_MESSAGE = 'Vibing on my own baby';
 const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
 
 (async () => {
     console.log('--------------------------------------------------');
-    console.log('🚀 WhatsApp Responder Bot starting...');
-    console.log(`📡 Monitoring "${CONTACT_NAME}" for "${TRIGGER_MESSAGE}"...`);
+    console.log('🚀 WhatsApp Bot starting...');
+    console.log(`📡 Targeting: "${CONTACT_NAME}"`);
+    console.log(`💖 Initial Burst: "${BURST_MESSAGE}" (${BURST_COUNT} times)`);
+    console.log(`📡 Monitoring for: "${TRIGGER_MESSAGE}"`);
     console.log('--------------------------------------------------');
 
     // Ensure session directory exists
@@ -21,45 +28,46 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     const context = await chromium.launchPersistentContext(SESSION_PATH, {
         headless: false,
         viewport: { width: 1280, height: 800 },
-        args: ['--disable-blink-features=AutomationControlled'],
+        args: [
+            '--disable-blink-features=AutomationControlled',
+            '--no-sandbox',
+            '--disable-setuid-sandbox'
+        ],
         ignoreHTTPSErrors: true
     });
 
     const page = await context.newPage();
-    
-    // Increase default timeout to 2 minutes for slow loads/auth
-    page.setDefaultTimeout(120000);
+    page.setDefaultTimeout(120000); // 2 minutes
 
     console.log('🌐 Opening WhatsApp Web...');
     await page.goto('https://web.whatsapp.com');
 
-    // 1. CHECK LOGIN / WAIT FOR LOGIN
-    console.log('🔍 Waiting for WhatsApp to load and Login to be confirmed...');
+    // 1. WAIT FOR LOGIN
+    console.log('🔍 Waiting for WhatsApp to load...');
     try {
-        // Wait for search box or chat list to appear, if it fails within 1 min, check for QR code
         await page.waitForSelector('#pane-side, [data-testid="search"], [aria-label="Search"]', { timeout: 45000 });
         console.log('✅ WhatsApp Loaded!');
     } catch (e) {
-        console.log('👉 ACTION REQUIRED: Please scan the QR code if visible on the screen.');
+        console.log('👉 ACTION REQUIRED: Please scan the QR code if visible.');
         try {
-            // Wait indefinitely if QR code is visible
             await page.waitForSelector('#pane-side, [data-testid="search"], [aria-label="Search"]', { timeout: 0 });
             console.log('✅ Login confirmed!');
         } catch (err) {
-            console.error('❌ Failed to detect login. Please try again.');
+            console.error('❌ Login failed.');
             await context.close();
             process.exit(1);
         }
     }
 
-    // 2. SEARCH AND OPEN CHAT
-    console.log(`🔎 Automatically opening chat: "${CONTACT_NAME}"...`);
-    
+    // 2. OPEN CHAT
+    console.log(`🔎 Searching for "${CONTACT_NAME}"...`);
     let chatOpened = false;
-    let retries = 3;
+    let retries = 5;
+    
     while (retries > 0 && !chatOpened) {
         try {
-            const searchBoxSelector = '[contenteditable="true"][data-tab="3"], [aria-label="Search"], [data-testid="search"]';
+            // Wait for search box using multiple common selectors
+            const searchBoxSelector = 'div[contenteditable="true"][data-tab="3"], [data-testid="search-input-element-role"], [aria-label="Search text input field"]';
             await page.waitForSelector(searchBoxSelector, { timeout: 20000 });
             const searchBox = page.locator(searchBoxSelector).first();
             
@@ -69,32 +77,68 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
             await page.keyboard.up('Control');
             await page.keyboard.press('Backspace');
             
-            await page.keyboard.type(CONTACT_NAME, { delay: 150 });
-            await page.waitForTimeout(2000); 
+            await page.keyboard.type(CONTACT_NAME, { delay: 100 });
+            await page.waitForTimeout(3000); // Wait for results
             
-            const itemSelector = `[title="${CONTACT_NAME}"]`;
-            await page.waitForSelector(itemSelector, { timeout: 10000 });
-            await page.click(itemSelector);
+            // Look for the contact in the side pane results
+            // We use a broader approach: look for the title in the chat list area
+            const contactSelector = `span[title="${CONTACT_NAME}"], [data-testid="cell-frame-container"] span[title="${CONTACT_NAME}"]`;
+            await page.waitForSelector(contactSelector, { timeout: 10000 });
             
-            // Verify chat header
+            // Click the one specifically in the side pane / search results
+            const results = page.locator(contactSelector);
+            const count = await results.count();
+            
+            let clicked = false;
+            for (let i = 0; i < count; i++) {
+                const res = results.nth(i);
+                if (await res.isVisible()) {
+                    await res.click();
+                    clicked = true;
+                    break;
+                }
+            }
+            
+            if (!clicked) throw new Error('Result found but not clickable');
+
+            // Confirm it's open by checking the header
             await page.waitForSelector(`header span[title="${CONTACT_NAME}"]`, { timeout: 10000 });
-            console.log(`✅ Success: Chat with "${CONTACT_NAME}" is now open.`);
+            console.log(`✅ Success: Chat with "${CONTACT_NAME}" is open.`);
             chatOpened = true;
         } catch (e) {
-            console.log(`⚠️ Retry opening chat... (${retries} attempts left)`);
+            console.log(`⚠️ Search/Open failed: ${e.message.split('\n')[0]}. Retrying...`);
             retries--;
             await page.waitForTimeout(3000);
         }
     }
 
     if (!chatOpened) {
-        console.error('❌ Could not open chat automatically. Please click it manually.');
-        // Wait for message box as fallback
+        console.log('❌ Auto-search failed multiple times. Please click the chat manually.');
         await page.waitForSelector('footer [contenteditable="true"]', { timeout: 0 });
     }
 
-    console.log(`✅ Monitoring for "${TRIGGER_MESSAGE}"...`);
+    // 3. INITIAL BURST
+    console.log(`🚀 Sending initial burst: "${BURST_MESSAGE}" x ${BURST_COUNT}...`);
+    const messageBoxSelector = 'footer [contenteditable="true"], [data-testid="conversation-text-input"]';
+    
+    for (let i = 1; i <= BURST_COUNT; i++) {
+        try {
+            await page.waitForSelector(messageBoxSelector);
+            const messageBox = page.locator(messageBoxSelector).first();
+            await messageBox.click();
+            await page.fill(messageBoxSelector, BURST_MESSAGE);
+            await page.keyboard.press('Enter');
+            console.log(`📈 Burst Progress: ${i}/${BURST_COUNT}`);
+            await page.waitForTimeout(500 + Math.random() * 500);
+        } catch (e) {
+            console.log(`⚠️ Burst retry ${i}...`);
+            i--;
+        }
+    }
+    console.log('✅ Burst complete.');
 
+    // 4. MONITORING LOOP
+    console.log(`📡 Now monitoring for "${TRIGGER_MESSAGE}"...`);
     let lastRepliedMessageId = null;
 
     while (true) {
@@ -106,18 +150,19 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
                 const messageTextContent = await latestMessage.innerText();
                 const messageId = await latestMessage.getAttribute('data-id');
 
+                // Check if it's an incoming message
                 const isOutgoing = await latestMessage.evaluate(node => {
-                    return node.closest('.message-out') !== null || node.innerHTML.includes('data-testid="msg-check"');
+                    return node.closest('.message-out') !== null || 
+                           node.innerHTML.includes('data-testid="msg-check"') ||
+                           node.innerHTML.includes('data-testid="msg-dblcheck"');
                 });
 
                 if (!isOutgoing && messageId !== lastRepliedMessageId) {
                     if (messageTextContent.toLowerCase().includes(TRIGGER_MESSAGE.toLowerCase())) {
                         console.log(`🔔 Trigger detected: "${messageTextContent}"`);
                         
-                        const messageBoxSelector = 'footer [contenteditable="true"], [data-testid="conversation-text-input"]';
                         await page.waitForSelector(messageBoxSelector);
                         const messageBox = page.locator(messageBoxSelector).first();
-
                         await messageBox.click();
                         await page.fill(messageBoxSelector, RESPONSE_MESSAGE);
                         await page.keyboard.press('Enter');
@@ -128,9 +173,8 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
                 }
             }
         } catch (error) {
-            // Quietly ignore temporary DOM errors during scroll/refresh
+            // Temporary error handling for DOM changes
         }
-
         await page.waitForTimeout(2000);
     }
 })();
