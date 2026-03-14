@@ -5,8 +5,8 @@ const path = require('path');
  * CONFIGURATION
  */
 const CONTACT_NAME = 'Bidita lpu';
-const MESSAGE_TEXT = 'bandar';
-const MESSAGE_COUNT = 10;
+const MESSAGE_TEXT = 'Tum pyaari ho or yeh majak tha';
+const MESSAGE_COUNT = 5;
 const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
 
 (async () => {
@@ -49,7 +49,7 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     try {
         // Wait for the search box
         const searchBoxSelector = '[contenteditable="true"][data-tab="3"], [aria-label="Search"], [data-testid="search"]';
-        await page.waitForSelector(searchBoxSelector, { timeout: 30000 });
+        await page.waitForSelector(searchBoxSelector, { timeout: 15000 });
         const searchBox = page.locator(searchBoxSelector).first();
         
         // Click and clear
@@ -70,13 +70,23 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
         await page.click(itemSelector);
         
         // Final verify by checking the header
-        await page.waitForSelector(`header span[title="${CONTACT_NAME}"]`, { timeout: 5000 });
-        console.log(`✅ Success: Chat with "${CONTACT_NAME}" is now open.`);
+        await page.waitForTimeout(2000);
+        console.log(`✅ Success: Chat with "${CONTACT_NAME}" should be open.`);
     } catch (e) {
-        console.log(`⚠️ Auto-search had an issue: ${e.message.split('\n')[0]}`);
+        console.log(`⚠️ Auto-search had an issue`);
         console.log(`👉 IF THE CHAT IS NOT OPEN: Please click on "${CONTACT_NAME}" yourself.`);
-        // Wait for ANY message box to be visible as fallback
-        await page.waitForSelector('footer [contenteditable="true"]', { timeout: 0 });
+    }
+
+    // Wait until the user opens the chat manually or it opened automatically
+    console.log(`⏳ Waiting for the message input box to be visible...`);
+    let messageBoxObj;
+    try {
+        const messageBoxLocators = 'footer [contenteditable="true"], [title="Type a message"], [data-testid="conversation-text-input"]';
+        await page.waitForSelector(messageBoxLocators, { timeout: 60000 });
+        console.log('✅ Chat is open and ready to receive messages!');
+    } catch (e) {
+        console.log('❌ Timed out waiting for message box. Please run again and make sure the chat opens.');
+        process.exit(1);
     }
 
     // 3. SEND MESSAGES
@@ -85,35 +95,35 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     for (let i = 1; i <= MESSAGE_COUNT; i++) {
         try {
             // Re-find the message box to be safe
-            const messageBoxSelector = 'footer [contenteditable="true"], [data-testid="conversation-text-input"]';
-            await page.waitForSelector(messageBoxSelector, { timeout: 10000 });
-            const messageBox = page.locator(messageBoxSelector).first();
+            const messageBoxSelectors = 'footer [contenteditable="true"], [title="Type a message"], [data-testid="conversation-text-input"]';
+            await page.waitForSelector(messageBoxSelectors, { timeout: 10000 });
+            const messageBox = page.locator(messageBoxSelectors).first();
             
             // Focus and click
-            await messageBox.click();
+            await messageBox.click({ force: true });
             
             // Clear and Type
             await page.keyboard.down('Control');
             await page.keyboard.press('A');
             await page.keyboard.up('Control');
             await page.keyboard.press('Backspace');
-            await page.keyboard.type(MESSAGE_TEXT, { delay: 10 });
+            await page.keyboard.type(MESSAGE_TEXT, { delay: 20 });
             
             // Give it a tiny moment and send
-            await page.waitForTimeout(300);
+            await page.waitForTimeout(500);
             await page.keyboard.press('Enter');
             
             // Fallback Send Button Click
-            await page.waitForTimeout(200);
-            const sendButton = page.locator('[data-testid="compose-btn-send"], [aria-label="Send"]');
+            await page.waitForTimeout(300);
+            const sendButton = page.locator('[data-testid="compose-btn-send"], [aria-label="Send"], span[data-icon="send"]');
             if (await sendButton.count() > 0 && await sendButton.isVisible()) {
-                await sendButton.click();
+                await sendButton.click({ force: true });
             }
 
             console.log(`📈 Progress: ${i}/${MESSAGE_COUNT}`);
 
             // Natural delay
-            await page.waitForTimeout(400 + Math.random() * 400);
+            await page.waitForTimeout(500 + Math.random() * 500);
         } catch (e) {
             console.log(`⚠️ Retry message ${i}...`);
             await page.waitForTimeout(2000);
