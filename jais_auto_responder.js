@@ -91,27 +91,28 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
 
     while (true) {
         try {
-            // Check for message containers
+            // Check for message containers - using a more specific selector for the latest incoming message
             const messages = await page.locator('[data-testid="msg-container"]').all();
             if (messages.length > 0) {
                 const latestMessage = messages[messages.length - 1];
-                const text = (await latestMessage.innerText()).trim();
                 const id = await latestMessage.getAttribute('data-id');
 
-                // Determine if it's an incoming message (not from us)
-                const isOutgoing = await latestMessage.evaluate(node => {
-                    return node.closest('.message-out') !== null || 
-                           node.querySelector('[data-testid="msg-check"]') !== null ||
-                           node.querySelector('[data-testid="msg-dblcheck"]') !== null;
-                });
+                if (id !== lastRepliedMessageId) {
+                    const text = (await latestMessage.innerText()).trim();
 
-                if (!isOutgoing && id !== lastRepliedMessageId) {
-                    if (text.toLowerCase().includes(TRIGGER_MESSAGE.toLowerCase())) {
-                        console.log(`⭐ Trigger detected: "${text}"`);
+                    // Determine if it's an incoming message (not from us)
+                    const isOutgoing = await latestMessage.evaluate(node => {
+                        return node.closest('.message-out') !== null || 
+                               node.querySelector('[data-testid="msg-check"]') !== null ||
+                               node.querySelector('[data-testid="msg-dblcheck"]') !== null;
+                    });
+
+                    if (!isOutgoing && text.toLowerCase().includes(TRIGGER_MESSAGE.toLowerCase())) {
+                        console.log(`⭐ Trigger detected ("as soon as possible"): "${text}"`);
                         
                         const messageBox = page.locator(messageBoxSelector).first();
                         await messageBox.click({ force: true });
-                        await page.keyboard.type(RESPONSE_MESSAGE, { delay: 40 });
+                        await page.keyboard.type(RESPONSE_MESSAGE, { delay: 10 }); // Ultra-fast typing
                         await page.keyboard.press('Enter');
                         
                         lastRepliedMessageId = id;
@@ -120,8 +121,8 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
                 }
             }
         } catch (err) {
-            // Silence DOM detached errors during polling
+            // Silence DOM detached errors
         }
-        await page.waitForTimeout(2000); // Poll every 2 seconds
+        await page.waitForTimeout(500); // Poll every 500ms for high responsiveness
     }
 })();
