@@ -47,14 +47,15 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
         await page.waitForSelector('#pane-side, [data-testid="chat-list"]', { timeout: 0 });
     }
 
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(2000);
 
     // 2. SEARCH AND OPEN CHAT
     console.log(`🔎 Searching for "${CONTACT_NAME}"...`);
     
-    // Focus search box using keyboard shortcut '/'
+    // Quick focus search box
     await page.keyboard.press('/');
-    await page.waitForTimeout(1000);
+    // No need for long timeout if already loaded
+    await page.waitForTimeout(300);
 
     const searchBoxSelector = 'div[contenteditable="true"][data-tab="3"], [data-testid="search-input-element-role"]';
     const searchBox = page.locator(searchBoxSelector).first();
@@ -65,10 +66,12 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
         await page.keyboard.press('A');
         await page.keyboard.up('Control');
         await page.keyboard.press('Backspace');
-        await page.keyboard.type(CONTACT_NAME, { delay: 100 });
+        // Faster typing
+        await page.keyboard.type(CONTACT_NAME, { delay: 30 });
         
         console.log(`   Typed "${CONTACT_NAME}", waiting for results...`);
-        await page.waitForTimeout(4000);
+        // Reduced wait time for results
+        await page.waitForTimeout(1000);
 
         // Look for the contact in the results
         const contactSelector = `span[title="${CONTACT_NAME}"], span[title="${CONTACT_NAME} (You)"]`;
@@ -90,10 +93,11 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     const messageBoxSelector = 'footer [contenteditable="true"], [data-testid="conversation-text-input"]';
     console.log(`🚀 Sending message...`);
     try {
-        await page.waitForSelector(messageBoxSelector);
+        // Wait specifically for the message box to be clickable
+        await page.waitForSelector(messageBoxSelector, { timeout: 5000 });
         const messageBox = page.locator(messageBoxSelector).first();
         await messageBox.click({ force: true });
-        await page.keyboard.type(MESSAGE_TEXT);
+        await page.keyboard.type(MESSAGE_TEXT, { delay: 20 });
         await page.keyboard.press('Enter');
         console.log(`✅ Sent: "${MESSAGE_TEXT}"`);
     } catch (err) {
