@@ -95,35 +95,52 @@ const CAPTURE_FILE = path.join(__dirname, 'status_capture.png');
         // Wait for status viewer and capture
         console.log('📸 Capturing status screenshot...');
         const viewerSelector = '[data-testid="status-v3-viewer-container"], div[role="dialog"], .velocity-animating';
-        await page.waitForSelector(viewerSelector, { timeout: 15000 });
-        
-        // Wait for media to load
-        await page.waitForTimeout(3000); 
-        await page.screenshot({ path: CAPTURE_FILE });
-        console.log(`✅ Status captured to ${CAPTURE_FILE}`);
+        try {
+            await page.waitForSelector(viewerSelector, { timeout: 30000 });
+            
+            // Wait for media to load fully
+            await page.waitForTimeout(4000); 
+            if (!page.isClosed()) {
+                await page.screenshot({ path: CAPTURE_FILE });
+                console.log(`✅ Status captured to ${CAPTURE_FILE}`);
+            }
+        } catch (e) {
+            console.log(`⚠️ Status viewer did not appear or was closed: ${e.message}`);
+        }
 
         // Close viewer
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(1000);
-        // Navigate back to chats
-        await page.click('[data-testid="back"], [title="Back"], [aria-label="Back"]').catch(() => {});
+        if (!page.isClosed()) {
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(1000);
+            // Navigate back to chats
+            await page.click('[data-testid="back"], [title="Back"], [aria-label="Back"]').catch(() => {});
+        }
     } catch (e) {
-        console.log(`❌ Failed to capture status: ${e.message}`);
+        console.log(`❌ Failed during status phase: ${e.message}`);
     }
 
     // 3. SEND TO RECIPIENT
+    if (page.isClosed()) {
+        console.log('❌ Browser was closed. Aborting share phase.');
+        process.exit(1);
+    }
+
     console.log(`🔎 Searching for "${RECIPIENT_NAME}"...`);
     try {
+        await page.waitForTimeout(2000);
+        
+        // Try multiple ways to focus search
+        await page.keyboard.press('Escape'); 
         await page.waitForTimeout(1000);
-        await page.keyboard.press('/'); // Quick focus search
+        await page.keyboard.press('/'); 
         await page.waitForTimeout(1000);
 
-        // More robust search box selectors
         const searchBoxSelectors = [
             'div[contenteditable="true"][data-tab="3"]',
             '[data-testid="search-input-element-role"]',
             'input[title="Search input textbox"]',
-            '[aria-label="Search text input field"]'
+            '[aria-label="Search text input field"]',
+            '.lexical-rich-text-input [contenteditable="true"]'
         ];
 
         let searchBox = null;
@@ -135,6 +152,22 @@ const CAPTURE_FILE = path.join(__dirname, 'status_capture.png');
             }
         }
 
+        if (!searchBox) {
+            console.log('⚠️ Search box not visible. Trying to click search icon...');
+            const searchIcon = page.locator('[data-testid="icon-search"], [data-icon="search"], [aria-label="Search"]').first();
+            if (await searchIcon.isVisible()) {
+                await searchIcon.click();
+                await page.waitForTimeout(2000);
+                for (const selector of searchBoxSelectors) {
+                    const loc = page.locator(selector).first();
+                    if (await loc.isVisible()) {
+                        searchBox = loc;
+                        break;
+                    }
+                }
+            }
+        }
+
         if (searchBox) {
             await searchBox.click();
             await page.keyboard.down('Control');
@@ -142,31 +175,32 @@ const CAPTURE_FILE = path.join(__dirname, 'status_capture.png');
             await page.keyboard.up('Control');
             await page.keyboard.press('Backspace');
             await page.keyboard.type(RECIPIENT_NAME, { delay: 100 });
-            await page.waitForTimeout(3000);
+            await page.waitForTimeout(4000);
 
             const contactSelector = `span[title="${RECIPIENT_NAME}"]`;
-            await page.waitForSelector(contactSelector, { timeout: 15000 });
+            await page.waitForSelector(contactSelector, { timeout: 20000 });
             await page.click(contactSelector);
             console.log(`✅ Chat with "${RECIPIENT_NAME}" open.`);
 
             // 4. UPLOAD IMAGE
             console.log('📤 Uploading screenshot...');
             const fileInputSelector = 'input[type="file"]';
-            // Wait for any file input to appear (usually created when clicking plus or always present)
-            await page.waitForSelector(fileInputSelector, { timeout: 10000 });
+            await page.waitForSelector(fileInputSelector, { timeout: 20000 });
             const fileInputs = page.locator(fileInputSelector);
             const count = await fileInputs.count();
-            
-            // Try the last one which is usually the active one
-            await fileInputs.last().setInputFiles(CAPTURE_FILE);
-            
-            // Wait for preview and send
-            console.log('⏳ Waiting for preview...');
-            const sendButtonSelector = '[data-testid="send"], [aria-label="Send"], span[data-icon="send"]';
-            await page.waitForSelector(sendButtonSelector, { timeout: 15000 });
-            await page.click(sendButtonSelector);
-            
-            console.log('🚀 Status shared successfully!');
+
+            if (count > 0) {
+                await fileInputs.last().setInputFiles(CAPTURE_FILE);
+                
+                console.log('⏳ Waiting for preview and send button...');
+                const sendButtonSelector = '[data-testid="send"], [aria-label="Send"], span[data-icon="send"]';
+                await page.waitForSelector(sendButtonSelector, { timeout: 30000 });
+                await page.click(sendButtonSelector);
+                
+                console.log('🚀 Status shared successfully!');
+            } else {
+                console.log('❌ No file inputs found.');
+            }
         } else {
             console.log('❌ Could not find search box.');
         }
