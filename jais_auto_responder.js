@@ -6,8 +6,8 @@ const fs = require('fs');
  * CONFIGURATION
  */
 const CONTACT_NAME = 'Jais';
-const TRIGGER_MESSAGE = 'Kkrh';
-const RESPONSE_MESSAGE = 'Vibing in my own';
+const TRIGGER_MESSAGE = 'kkrh';
+const RESPONSE_MESSAGE = 'Aapko yaad';
 const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
 
 (async () => {
