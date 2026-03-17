@@ -87,26 +87,49 @@ const MEDIA_PATH = path.join(__dirname, 'status_media'); // Extension added dyna
         }
         
         console.log('⏳ Waiting for Status items to load...');
-        const itemSelector = '[data-testid="status-v3-item-cell"], [aria-label="Recent"] > div, .status-v3-item';
-        try {
-            await page.waitForSelector(itemSelector, { timeout: 15000 });
-        } catch (e) {
-            console.log('⚠️ Status items not found. Taking debug screenshot...');
-            await page.screenshot({ path: path.join(__dirname, 'debug_status_tray.png') });
-            throw new Error('Status Tray failed to load items');
+        // Broader selectors for status items in the tray
+        const itemSelectors = [
+            '[data-testid="status-v3-item-cell"]',
+            'div[role="gridcell"]',
+            'div[role="row"]',
+            'div[role="listitem"]',
+            '.status-v3-item'
+        ];
+        
+        let itemSelectedSelector = null;
+        for (const selector of itemSelectors) {
+            try {
+                await page.waitForSelector(selector, { timeout: 10000 });
+                itemSelectedSelector = selector;
+                console.log(`✅ Items detected using selector: ${selector}`);
+                break;
+            } catch (e) {}
         }
 
+        if (!itemSelectedSelector) {
+            console.log('⚠️ Typical items not found. Taking debug screenshot...');
+            await page.screenshot({ path: path.join(__dirname, 'debug_status_tray_empty.png') });
+            throw new Error('Status Tray failed to load items or no statuses available');
+        }
+
+        await page.waitForTimeout(2000); // Wait for list to fully populate
+
         console.log('👀 Searching for a status to open...');
-        const items = page.locator(itemSelector);
-        const count = await items.count();
+        const itemsList = page.locator(itemSelectedSelector);
+        const count = await itemsList.count();
+        console.log(`📊 Found ${count} potential items.`);
+        
         let targetItem = null;
 
         for (let i = 0; i < count; i++) {
-            const item = items.nth(i);
-            const text = await item.innerText();
-            // Skip "My status" as we want other's status
-            if (!text.toLowerCase().includes('my status')) {
-                console.log(`🎯 Targeting status item: ${text.split('\n')[0]}`);
+            const item = itemsList.nth(i);
+            const text = await item.innerText().catch(() => '');
+            if (!text) continue;
+            
+            // Skip "My status" and empty rows
+            const lowerText = text.toLowerCase();
+            if (!lowerText.includes('my status') && !lowerText.includes('tap to add') && text.trim().length > 0) {
+                console.log(`🎯 Targeting status item: ${text.split('\n')[0].trim()}`);
                 targetItem = item;
                 break;
             }
@@ -114,18 +137,19 @@ const MEDIA_PATH = path.join(__dirname, 'status_media'); // Extension added dyna
 
         if (!targetItem) {
             console.log('⚠️ No other status items found, trying the first one anyway.');
-            targetItem = items.first();
+            targetItem = itemsList.first();
         }
 
-        // Try multiple click strategies if the first one fails
+        // Try multiple click strategies
         console.log('🖱️ Clicking status item...');
         await targetItem.focus();
-        await targetItem.click({ force: true });
+        await targetItem.click({ force: true }).catch(() => {});
+        
         // Small delay to see if viewer opens
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(2000);
         
         if (!(await page.locator('video, img[alt="Status"], [data-testid="status-v3-viewer-container"]').first().isVisible())) {
-            console.log('🔄 Click didn\'t seem to work, trying Dispatch Event...');
+            console.log('🔄 Click didn\'t seem to work, trying more aggressive interaction...');
             await targetItem.dispatchEvent('mousedown');
             await targetItem.click({ force: true });
         }
