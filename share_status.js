@@ -51,26 +51,43 @@ const MEDIA_PATH = path.join(__dirname, 'status_media'); // Extension added dyna
     try {
         console.log('📱 Opening Status section...');
         const statusIconSelectors = [
-            '[data-testid="status-v3-unread"]',
             '[data-testid="newsletter-outline-status-unread"]',
+            '[data-testid="status-v3-unread"]',
             '[title="Status"]',
             '[aria-label="Status"]',
-            'span[data-icon="status-v3"]'
+            'span[data-icon="status-v3"]',
+            'span[data-icon="newsletter-status-unread"]'
         ];
         
         let statusClicked = false;
         for (const selector of statusIconSelectors) {
             const icon = page.locator(selector).first();
             if (await icon.isVisible()) {
+                console.log(`🖱️ Clicking Status icon using: ${selector}`);
                 await icon.click({ force: true });
                 statusClicked = true;
                 break;
             }
         }
-        if (!statusClicked) await page.click('header [title="Status"]', { timeout: 2000 }).catch(() => {});
         
-        console.log('⏳ Waiting for Status Tray to load...');
-        const itemSelector = '[data-testid="status-v3-item-cell"], [aria-label="Recent"] > div, #pane-side div[role="row"]';
+        if (!statusClicked) {
+            console.log('⚠️ Standard icons not found, trying navigation via aria-label on sidebar...');
+            await page.click('div[role="button"][aria-label="Status"]').catch(() => {});
+        }
+
+        // Verify we are on Status page
+        console.log('⏳ Verifying transition to Status tray...');
+        try {
+            await page.waitForSelector('h1:has-text("Status"), span:has-text("Status")', { timeout: 10000 });
+            console.log('✅ Status tray confirmed.');
+        } catch (e) {
+            console.log('⚠️ Could not confirm Status tray via header. Taking debug screenshot...');
+            await page.screenshot({ path: path.join(__dirname, 'debug_status_nav_fail.png') });
+            // Continue anyway but with better selectors
+        }
+        
+        console.log('⏳ Waiting for Status items to load...');
+        const itemSelector = '[data-testid="status-v3-item-cell"], [aria-label="Recent"] > div, .status-v3-item';
         try {
             await page.waitForSelector(itemSelector, { timeout: 15000 });
         } catch (e) {
