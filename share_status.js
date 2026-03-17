@@ -71,14 +71,54 @@ const MEDIA_PATH = path.join(__dirname, 'status_media'); // Extension added dyna
         
         console.log('👀 Opening most recent status...');
         await page.waitForTimeout(2000);
-        const itemSelector = '[data-testid="status-v3-item-cell"], [aria-label="Recent"] > div, #pane-side div[role="row"]';
-        await page.locator(itemSelector).first().click({ force: true });
+        
+        const itemSelectors = [
+            '[data-testid="status-v3-item-cell"]',
+            '[aria-label="Recent"] > div',
+            '#pane-side div[role="row"]',
+            'div[role="listitem"]'
+        ];
+
+        let itemFound = false;
+        for (const sel of itemSelectors) {
+            const el = page.locator(sel).first();
+            if (await el.isVisible()) {
+                console.log(`🖱️ Clicking status item using: ${sel}`);
+                await el.click({ force: true });
+                itemFound = true;
+                break;
+            }
+        }
+
+        if (!itemFound) throw new Error('Could not find any status items to click');
 
         // 3. CAPTURE MEDIA
         console.log('📥 Detecting media type...');
-        const viewerSelector = '[data-testid="status-v3-viewer-container"], div[role="dialog"]';
-        await page.waitForSelector(viewerSelector, { timeout: 20000 });
-        await page.waitForTimeout(3000); // Allow media to load
+        const viewerSelectors = [
+            '[data-testid="status-v3-viewer-container"]',
+            'div[role="dialog"]',
+            'video',
+            'img[alt="Status"]',
+            '.velocity-animating'
+        ];
+        
+        let viewerFound = false;
+        for (let i = 0; i < 10; i++) { // Retry loop for viewer
+            for (const selector of viewerSelectors) {
+                const viewer = page.locator(selector).first();
+                if (await viewer.isVisible()) {
+                    console.log(`✅ Viewer detected using: ${selector}`);
+                    viewerFound = true;
+                    break;
+                }
+            }
+            if (viewerFound) break;
+            await page.waitForTimeout(1000);
+        }
+
+        if (!viewerFound) throw new Error('Could not detect status viewer after retries');
+
+        await page.waitForTimeout(5000); // Give plenty of time for video to load
 
         const mediaInfo = await page.evaluate(async () => {
             const video = document.querySelector('video');
