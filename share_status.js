@@ -47,17 +47,17 @@ const MEDIA_PATH = path.join(__dirname, 'status_media'); // Extension added dyna
         await page.waitForSelector(mainListSelector, { timeout: 0 });
     }
 
-    // 2. NAV TO STATUS
-    console.log('📱 Opening Status section...');
-    const statusIconSelectors = [
-        '[data-testid="newsletter-outline-status-unread"]',
-        '[data-testid="status-v3-unread"]',
-        '[title="Status"]',
-        '[aria-label="Status"]',
-        'span[data-icon="status-v3"]'
-    ];
-    
+    // 2. NAV TO STATUS AND SHARE
     try {
+        console.log('📱 Opening Status section...');
+        const statusIconSelectors = [
+            '[data-testid="status-v3-unread"]',
+            '[data-testid="newsletter-outline-status-unread"]',
+            '[title="Status"]',
+            '[aria-label="Status"]',
+            'span[data-icon="status-v3"]'
+        ];
+        
         let statusClicked = false;
         for (const selector of statusIconSelectors) {
             const icon = page.locator(selector).first();
@@ -67,30 +67,51 @@ const MEDIA_PATH = path.join(__dirname, 'status_media'); // Extension added dyna
                 break;
             }
         }
-        if (!statusClicked) await page.click('header [title="Status"]', { timeout: 1000 }).catch(() => {});
+        if (!statusClicked) await page.click('header [title="Status"]', { timeout: 2000 }).catch(() => {});
         
-        console.log('👀 Opening most recent status...');
-        await page.waitForTimeout(2000);
-        
-        const itemSelectors = [
-            '[data-testid="status-v3-item-cell"]',
-            '[aria-label="Recent"] > div',
-            '#pane-side div[role="row"]',
-            'div[role="listitem"]'
-        ];
+        console.log('⏳ Waiting for Status Tray to load...');
+        const itemSelector = '[data-testid="status-v3-item-cell"], [aria-label="Recent"] > div, #pane-side div[role="row"]';
+        try {
+            await page.waitForSelector(itemSelector, { timeout: 15000 });
+        } catch (e) {
+            console.log('⚠️ Status items not found. Taking debug screenshot...');
+            await page.screenshot({ path: path.join(__dirname, 'debug_status_tray.png') });
+            throw new Error('Status Tray failed to load items');
+        }
 
-        let itemFound = false;
-        for (const sel of itemSelectors) {
-            const el = page.locator(sel).first();
-            if (await el.isVisible()) {
-                console.log(`🖱️ Clicking status item using: ${sel}`);
-                await el.click({ force: true });
-                itemFound = true;
+        console.log('👀 Searching for a status to open...');
+        const items = page.locator(itemSelector);
+        const count = await items.count();
+        let targetItem = null;
+
+        for (let i = 0; i < count; i++) {
+            const item = items.nth(i);
+            const text = await item.innerText();
+            // Skip "My status" as we want other's status
+            if (!text.toLowerCase().includes('my status')) {
+                console.log(`🎯 Targeting status item: ${text.split('\n')[0]}`);
+                targetItem = item;
                 break;
             }
         }
 
-        if (!itemFound) throw new Error('Could not find any status items to click');
+        if (!targetItem) {
+            console.log('⚠️ No other status items found, trying the first one anyway.');
+            targetItem = items.first();
+        }
+
+        // Try multiple click strategies if the first one fails
+        console.log('🖱️ Clicking status item...');
+        await targetItem.focus();
+        await targetItem.click({ force: true });
+        // Small delay to see if viewer opens
+        await page.waitForTimeout(1000);
+        
+        if (!(await page.locator('video, img[alt="Status"], [data-testid="status-v3-viewer-container"]').first().isVisible())) {
+            console.log('🔄 Click didn\'t seem to work, trying Dispatch Event...');
+            await targetItem.dispatchEvent('mousedown');
+            await targetItem.click({ force: true });
+        }
 
         // 3. CAPTURE MEDIA
         console.log('📥 Detecting media type...');
@@ -98,16 +119,14 @@ const MEDIA_PATH = path.join(__dirname, 'status_media'); // Extension added dyna
             '[data-testid="status-v3-viewer-container"]',
             'div[role="dialog"]',
             'video',
-            'img[alt="Status"]',
-            '.velocity-animating'
+            'img[alt="Status"]'
         ];
         
         let viewerFound = false;
-        for (let i = 0; i < 10; i++) { // Retry loop for viewer
+        for (let i = 0; i < 20; i++) { 
             for (const selector of viewerSelectors) {
-                const viewer = page.locator(selector).first();
-                if (await viewer.isVisible()) {
-                    console.log(`✅ Viewer detected using: ${selector}`);
+                if (await page.locator(selector).first().isVisible()) {
+                    console.log(`✅ Viewer detected!`);
                     viewerFound = true;
                     break;
                 }
@@ -116,15 +135,18 @@ const MEDIA_PATH = path.join(__dirname, 'status_media'); // Extension added dyna
             await page.waitForTimeout(1000);
         }
 
-        if (!viewerFound) throw new Error('Could not detect status viewer after retries');
+        if (!viewerFound) {
+            await page.screenshot({ path: path.join(__dirname, 'debug_viewer_fail.png') });
+            throw new Error('Could not detect status viewer after retries. See debug_viewer_fail.png');
+        }
 
-        await page.waitForTimeout(5000); // Give plenty of time for video to load
+        await page.waitForTimeout(5000); // Give time for media to load
 
         const mediaInfo = await page.evaluate(async () => {
             const video = document.querySelector('video');
-            const img = document.querySelector('div[role="dialog"] img, [data-testid="status-v3-viewer-container"] img');
+            const img = document.querySelector('div[role="dialog"] img, [data-testid="status-v3-viewer-container"] img, img[alt="Status"]');
             
-            if (video && video.src) {
+            if (video && video.src && (video.src.startsWith('blob:') || video.src.startsWith('http'))) {
                 return { type: 'video', src: video.src };
             } else if (img && img.src) {
                 return { type: 'image', src: img.src };
