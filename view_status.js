@@ -31,71 +31,69 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     const page = await context.newPage();
     page.setDefaultTimeout(60000);
 
-    console.log('🌐 Opening WhatsApp Web...');
-    // Jump straight to status if possible, or wait for the tray icon
-    await page.goto('https://web.whatsapp.com');
+    console.log('🌐 Opening WhatsApp Web (Ultra-Fast)...');
+    // 'commit' is the fastest event - it starts as soon as the first byte is received
+    await page.goto('https://web.whatsapp.com', { waitUntil: 'commit' });
 
-    // 1. QUICK DETECTION OF LOADED STATE
-    console.log('🔍 Waiting for WhatsApp list (Fast Track)...');
+    // 1. INSTANT INTERACTION POINT
+    // We don't wait for 'load' or 'networkidle'. We wait for ANY core element.
+    const statusIconSelector = '[data-testid="status-v3-unread"], [data-testid="newsletter-outline-status-unread"], [title="Status"], [aria-label="Status"]';
     const mainListSelector = '#pane-side, [data-testid="chat-list"]';
+    
+    console.log('⚡ Racing for interaction point...');
     try {
-        await page.waitForSelector(mainListSelector, { timeout: 15000 });
-        console.log('✅ WhatsApp Loaded!');
+        // Wait for EITHER the list or the status icon to appear
+        await Promise.race([
+            page.waitForSelector(mainListSelector, { timeout: 15000 }),
+            page.waitForSelector(statusIconSelector, { timeout: 15000 })
+        ]);
+        console.log('✅ Entry point detected!');
     } catch (e) {
-        console.log('👉 ACTION REQUIRED: Please scan/login.');
+        console.log('👉 ACTION REQUIRED: Manual login/scan.');
         await page.waitForSelector(mainListSelector, { timeout: 0 });
     }
 
     // 2. IMMEDIATE NAV TO STATUS
-    console.log('📱 Navigating to Status section...');
-    const statusIconSelector = '[data-testid="newsletter-outline-status-unread"], [data-testid="status-v3-unread"], [title="Status"], [aria-label="Status"]';
-    
     try {
-        // Fast click on status icon
         const statusIcon = page.locator(statusIconSelector).first();
-        await statusIcon.waitFor({ state: 'visible', timeout: 5000 });
-        await statusIcon.click({ force: true });
+        // If it's already there, click it. If not, wait micro-seconds.
+        await statusIcon.click({ force: true, timeout: 2000 }).catch(() => {
+            // Fallback sidebar click
+            return page.click('header [data-testid="status-v2"], header [title="Status"]', { timeout: 1000 }).catch(() => {});
+        });
         console.log('✅ Switched to Status tray.');
     } catch (e) {
-        // Fallback sidebar click
-        await page.click('header [data-testid="status-v2"], header [title="Status"]', { timeout: 2000 }).catch(() => {});
+        console.log('⚠️ Status icon nav issue.');
     }
 
-    // 3. PRIORITY STATUS OPENING (UNVIEWED > RECENT)
-    console.log('👀 Searching for unviewed or recent status...');
-    
-    // Selectors for unviewed (green/blue ring) vs general status items
-    const unviewedSelector = '[data-testid="status-v3-item-cell"] [data-testid="icon-status-v3-unread"], [data-testid="status-v3-item-cell"] .status-unread';
+    // 3. ZERO-DELAY STATUS OPENING
+    const unviewedSelector = '[data-testid="status-v3-item-cell"] [data-testid="icon-status-v3-unread"], .status-unread';
     const generalItemSelector = '[data-testid="status-v3-item-cell"], [aria-label="Recent"] > div, #pane-side div[role="row"]';
 
     try {
-        // Wait briefly for either to appear
-        await page.waitForTimeout(1000); 
+        // Race between unviewed and first general item
+        const opener = async () => {
+            const unviewed = page.locator(unviewedSelector).first();
+            if (await unviewed.isVisible({ timeout: 500 }).catch(() => false)) {
+                console.log('🌟 Unviewed status found!');
+                await unviewed.locator('xpath=ancestor::div[@role="row" or @data-testid="status-v3-item-cell"]').first().click({ force: true });
+            } else {
+                console.log('📊 Opening most recent...');
+                await page.locator(generalItemSelector).first().click({ force: true });
+            }
+        };
 
-        // Try unviewed first
-        const unviewedItems = page.locator(unviewedSelector);
-        if (await unviewedItems.count() > 0) {
-            console.log('🌟 Found unviewed status! Opening...');
-            // Need to click the parent row of the unviewed icon
-            await unviewedItems.first().locator('xpath=ancestor::div[@role="row" or @data-testid="status-v3-item-cell"]').first().click({ force: true });
-        } else {
-            // Fallback to the very first item in the list (recent viewed)
-            console.log('📊 No unviewed found. Opening most recent...');
-            const firstRecent = page.locator(generalItemSelector).first();
-            await firstRecent.click({ force: true });
-        }
-        
-        console.log('🚀 Status opened IMMEDIATELY!');
+        await opener();
+        console.log('🚀 Status opened INSTANTLY!');
     } catch (e) {
-        console.log(`❌ Speed-run failed: ${e.message}`);
+        console.log(`❌ Speed-run error: ${e.message}`);
     }
 
     console.log('--------------------------------------------------');
     console.log('🏁 MISSION COMPLETE.');
     console.log('--------------------------------------------------');
 
-    // Hold briefly then close
-    await page.waitForTimeout(15000);
+    await page.waitForTimeout(10000); // 10s for the user to see
     await context.close();
     process.exit(0);
 })();
