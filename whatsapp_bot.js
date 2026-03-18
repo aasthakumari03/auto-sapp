@@ -11,82 +11,99 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
 
 (async () => {
     console.log('--------------------------------------------------');
-    console.log('🚀 WhatsApp Automation Bot starting...');
+    console.log('🚀 WhatsApp Automation Bot starting (Optimized)...');
     console.log('--------------------------------------------------');
 
     const context = await chromium.launchPersistentContext(SESSION_PATH, {
         headless: false,
         viewport: { width: 1280, height: 800 },
-        args: ['--disable-blink-features=AutomationControlled'],
-        // Ignore certificate errors and other potential blockers
+        args: [
+            '--disable-blink-features=AutomationControlled',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-extensions',
+            '--disable-component-update',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--disable-background-networking',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-breakpad',
+            '--disable-client-side-phishing-detection',
+            '--disable-default-apps',
+            '--disable-dev-shm-usage',
+            '--disable-features=TranslateUI',
+            '--disable-hang-monitor',
+            '--disable-ipc-flooding-protection',
+            '--disable-popup-blocking',
+            '--disable-prompt-on-repost',
+            '--disable-renderer-backgrounding',
+            '--disable-sync',
+            '--force-color-profile=srgb',
+            '--metrics-recording-only',
+            '--use-mock-keychain'
+        ],
         ignoreHTTPSErrors: true
     });
 
     const page = await context.newPage();
+    page.setDefaultTimeout(60000); 
+
+    // Performance: Block unnecessary resources
+    await page.route('**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2,ttf,otf}', route => route.abort());
     
     console.log('🌐 Opening WhatsApp Web...');
-    await page.goto('https://web.whatsapp.com');
+    await page.goto('https://web.whatsapp.com', { waitUntil: 'domcontentloaded' });
 
     // 1. CHECK LOGIN / WAIT FOR LOGIN
-    console.log('🔍 Waiting for WhatsApp to load and Login to be confirmed...');
+    console.log('🔍 Waiting for WhatsApp to load...');
     try {
-        // Wait for the main app container or search box to appear
-        await page.waitForSelector('#pane-side, [data-testid="search"], [aria-label="Search"]', { timeout: 30000 });
+        await page.waitForSelector('#pane-side, [data-testid="chat-list"]', { timeout: 45000 });
         console.log('✅ WhatsApp Loaded!');
     } catch (e) {
         console.log('👉 ACTION REQUIRED: Please scan the QR code if visible.');
-        // Wait indefinitely for the login to happen
-        await page.waitForSelector('#pane-side, [data-testid="search"], [aria-label="Search"]', { timeout: 0 });
+        await page.waitForSelector('#pane-side, [data-testid="chat-list"]', { timeout: 0 });
         console.log('✅ Login confirmed!');
     }
-
-    console.log('⏳ Waiting 5 seconds for stability...');
-    await page.waitForTimeout(5000);
 
     // 2. SEARCH AND OPEN CHAT AUTOMATICALLY
     console.log(`🔎 Automatically opening chat: "${CONTACT_NAME}"...`);
     
     try {
-        // Wait for the search box
         const searchBoxSelector = '[contenteditable="true"][data-tab="3"], [aria-label="Search"], [data-testid="search"]';
-        await page.waitForSelector(searchBoxSelector, { timeout: 15000 });
+        await page.waitForSelector(searchBoxSelector, { timeout: 10000 });
         const searchBox = page.locator(searchBoxSelector).first();
         
-        // Click and clear
         await searchBox.click();
         await page.keyboard.down('Control');
         await page.keyboard.press('A');
         await page.keyboard.up('Control');
         await page.keyboard.press('Backspace');
         
-        // Type the name
-        await page.keyboard.type(CONTACT_NAME, { delay: 150 });
-        await page.waitForTimeout(2000); // Wait for search results
+        // Faster typing
+        await page.keyboard.type(CONTACT_NAME, { delay: 10 });
         
-        // Click the specific item in the list that matches the name
         console.log(`   - Looking for "${CONTACT_NAME}" in results...`);
         const itemSelector = `[title="${CONTACT_NAME}"]`;
-        await page.waitForSelector(itemSelector, { timeout: 10000 });
-        await page.click(itemSelector);
+        const result = page.locator(itemSelector).first();
         
-        // Final verify by checking the header
-        await page.waitForTimeout(2000);
-        console.log(`✅ Success: Chat with "${CONTACT_NAME}" should be open.`);
+        await result.waitFor({ state: 'visible', timeout: 5000 });
+        await result.click();
+        
+        console.log(`✅ Success: Chat with "${CONTACT_NAME}" opened.`);
     } catch (e) {
-        console.log(`⚠️ Auto-search had an issue`);
-        console.log(`👉 IF THE CHAT IS NOT OPEN: Please click on "${CONTACT_NAME}" yourself.`);
+        console.log(`⚠️ Auto-search had an issue, checking if manually open?`);
     }
 
-    // Wait until the user opens the chat manually or it opened automatically
-    console.log(`⏳ Waiting for the message input box to be visible...`);
-    let messageBoxObj;
+    // Wait for the message input box
+    console.log(`⏳ Waiting for the message input box...`);
+    const messageBoxSelectors = 'footer [contenteditable="true"], [data-testid="conversation-text-input"]';
     try {
-        const messageBoxLocators = 'footer [contenteditable="true"], [title="Type a message"], [data-testid="conversation-text-input"]';
-        await page.waitForSelector(messageBoxLocators, { timeout: 60000 });
-        console.log('✅ Chat is open and ready to receive messages!');
+        await page.waitForSelector(messageBoxSelectors, { timeout: 10000 });
+        console.log('✅ Chat is ready!');
     } catch (e) {
-        console.log('❌ Timed out waiting for message box. Please run again and make sure the chat opens.');
-        process.exit(1);
+        console.log('❌ Timed out waiting for message box. Please click manually.');
+        await page.waitForSelector(messageBoxSelectors, { timeout: 0 });
     }
 
     // 3. SEND MESSAGES
@@ -94,48 +111,32 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     
     for (let i = 1; i <= MESSAGE_COUNT; i++) {
         try {
-            // Re-find the message box to be safe
-            const messageBoxSelectors = 'footer [contenteditable="true"], [title="Type a message"], [data-testid="conversation-text-input"]';
-            await page.waitForSelector(messageBoxSelectors, { timeout: 10000 });
             const messageBox = page.locator(messageBoxSelectors).first();
-            
-            // Focus and click
             await messageBox.click({ force: true });
             
-            // Clear and Type
+            // Fast clear and type
             await page.keyboard.down('Control');
             await page.keyboard.press('A');
             await page.keyboard.up('Control');
             await page.keyboard.press('Backspace');
-            await page.keyboard.type(MESSAGE_TEXT, { delay: 20 });
-            
-            // Give it a tiny moment and send
-            await page.waitForTimeout(500);
+            await page.keyboard.type(MESSAGE_TEXT, { delay: 5 });
             await page.keyboard.press('Enter');
-            
-            // Fallback Send Button Click
-            await page.waitForTimeout(300);
-            const sendButton = page.locator('[data-testid="compose-btn-send"], [aria-label="Send"], span[data-icon="send"]');
-            if (await sendButton.count() > 0 && await sendButton.isVisible()) {
-                await sendButton.click({ force: true });
-            }
 
             console.log(`📈 Progress: ${i}/${MESSAGE_COUNT}`);
 
-            // Natural delay
-            await page.waitForTimeout(500 + Math.random() * 500);
+            // Reduced delay
+            await page.waitForTimeout(400 + Math.random() * 300);
         } catch (e) {
             console.log(`⚠️ Retry message ${i}...`);
-            await page.waitForTimeout(2000);
             i--; 
         }
     }
 
     console.log('--------------------------------------------------');
-    console.log('🏁 MISSION COMPLETE: All messages sent successfully!');
+    console.log('🏁 MISSION COMPLETE');
     console.log('--------------------------------------------------');
 
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(2000);
     await context.close();
     console.log('👋 Bot closed.');
 })();
