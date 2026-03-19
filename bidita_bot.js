@@ -30,25 +30,8 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
             '--disable-blink-features=AutomationControlled',
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-extensions',
-            '--disable-component-update',
-            '--no-first-run',
-            '--no-default-browser-check',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-breakpad',
-            '--disable-client-side-phishing-detection',
-            '--disable-default-apps',
             '--disable-dev-shm-usage',
-            '--disable-features=TranslateUI',
-            '--disable-hang-monitor',
-            '--disable-ipc-flooding-protection',
-            '--disable-popup-blocking',
-            '--disable-prompt-on-repost',
-            '--disable-renderer-backgrounding',
-            '--force-color-profile=srgb',
-            '--metrics-recording-only',
-            '--use-mock-keychain'
+            '--force-color-profile=srgb'
         ],
         ignoreHTTPSErrors: true
     });
@@ -187,6 +170,8 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
     console.log('🏁 MISSION COMPLETE');
     console.log('--------------------------------------------------');
 
-    await page.waitForTimeout(2000);
+    console.log('⏳ Gracefully saving session (5s)...');
+    await page.waitForTimeout(5000);
     await context.close();
+    console.log('👋 Bot closed.');
 })();
