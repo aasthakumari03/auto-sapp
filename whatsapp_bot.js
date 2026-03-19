@@ -1,5 +1,6 @@
 const { chromium } = require('playwright');
 const path = require('path');
+const fs = require('fs');
 
 /**
  * CONFIGURATION
@@ -8,14 +9,20 @@ const CONTACT_NAME = 'Bidita lpu';
 const MESSAGE_TEXT = 'Tum pyaari ho or yeh majak tha';
 const MESSAGE_COUNT = 5;
 const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 (async () => {
     console.log('--------------------------------------------------');
     console.log('🚀 WhatsApp Automation Bot starting (Optimized)...');
     console.log('--------------------------------------------------');
 
+    if (!fs.existsSync(SESSION_PATH)) {
+        fs.mkdirSync(SESSION_PATH, { recursive: true });
+    }
+
     const context = await chromium.launchPersistentContext(SESSION_PATH, {
         headless: false,
+        userAgent: USER_AGENT,
         viewport: { width: 1280, height: 800 },
         args: [
             '--disable-blink-features=AutomationControlled',
@@ -25,7 +32,6 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
             '--disable-component-update',
             '--no-first-run',
             '--no-default-browser-check',
-            '--disable-background-networking',
             '--disable-background-timer-throttling',
             '--disable-backgrounding-occluded-windows',
             '--disable-breakpad',
@@ -38,7 +44,6 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
             '--disable-popup-blocking',
             '--disable-prompt-on-repost',
             '--disable-renderer-backgrounding',
-            '--disable-sync',
             '--force-color-profile=srgb',
             '--metrics-recording-only',
             '--use-mock-keychain'
@@ -55,15 +60,28 @@ const SESSION_PATH = path.join(__dirname, 'whatsapp_session');
     console.log('🌐 Opening WhatsApp Web...');
     await page.goto('https://web.whatsapp.com', { waitUntil: 'domcontentloaded' });
 
-    // 1. CHECK LOGIN / WAIT FOR LOGIN
-    console.log('🔍 Waiting for WhatsApp to load...');
+    // 1. FAST LOGIN / WAIT FOR LOAD
+    console.log('🔍 Checking login status...');
+    const chatListSelector = '#pane-side, [data-testid="chat-list"]';
+    const qrCodeSelector = 'canvas[aria-label="Scan this QR code"], [data-testid="qrcode"]';
+
     try {
-        await page.waitForSelector('#pane-side, [data-testid="chat-list"]', { timeout: 45000 });
-        console.log('✅ WhatsApp Loaded!');
+        const result = await Promise.race([
+            page.waitForSelector(chatListSelector, { timeout: 45000 }).then(() => 'LOGGED_IN'),
+            page.waitForSelector(qrCodeSelector, { timeout: 45000 }).then(() => 'NEEDS_LOGIN')
+        ]);
+
+        if (result === 'LOGGED_IN') {
+            console.log('✅ WhatsApp Loaded! (Session active)');
+        } else {
+            console.log('👉 ACTION REQUIRED: Please scan the QR code to login.');
+            await page.waitForSelector(chatListSelector, { timeout: 0 });
+            console.log('✅ Login confirmed!');
+        }
     } catch (e) {
-        console.log('👉 ACTION REQUIRED: Please scan the QR code if visible.');
-        await page.waitForSelector('#pane-side, [data-testid="chat-list"]', { timeout: 0 });
-        console.log('✅ Login confirmed!');
+        console.log('⚠️ Loading taking longer than expected. Please check the browser.');
+        await page.waitForSelector(chatListSelector, { timeout: 0 });
+        console.log('✅ WhatsApp finally loaded!');
     }
 
     // 2. SEARCH AND OPEN CHAT AUTOMATICALLY
